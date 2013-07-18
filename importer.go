@@ -113,7 +113,7 @@ func (imp Importer) Import(imports map[string]*types.Package, path string) (pkg 
 		Import: imp.Import,
 	}
 
-	pkg, err = context.Check(name, fileSet, ff...)
+	pkg, err = context.Check(name, fileSet, ff, nil)
 	if err != nil {
 		return pkg, err
 	}
