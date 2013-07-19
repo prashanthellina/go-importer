@@ -109,7 +109,7 @@ func (imp Importer) Import(imports map[string]*types.Package, path string) (pkg 
 		ff = append(ff, f)
 	}
 
-	context := types.Context{
+	context := types.Config{
 		Import: imp.Import,
 	}
 
