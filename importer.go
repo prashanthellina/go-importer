@@ -117,7 +117,6 @@ func (imp Importer) Import(imports map[string]*types.Package, path string) (pkg 
 	if err != nil {
 		return pkg, err
 	}
-	pkg.MarkComplete()
 
 	imports[path] = pkg
 	imp.Imports[path] = pkg
