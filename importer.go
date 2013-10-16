@@ -11,15 +11,24 @@ import (
 	"strings"
 )
 
-type Importer struct {
-	UseGcFallback bool                      // Whether to fall back to GcImport when presented with a package that imports "C"
-	Imports       map[string]*types.Package // All packages imported by Importer
-	Fallbacks     []string                  // List of imports that we had to fall back to GcImport for
+type Config struct {
+	UseGcFallback bool // Whether to fall back to GcImport when presented with a package that imports "C"
 }
 
-func NewImporter() *Importer {
+type Importer struct {
+	Imports   map[string]*types.Package // All packages imported by Importer
+	Fallbacks []string                  // List of imports that we had to fall back to GcImport for
+	Config    *Config
+}
+
+func NewImporter(cfg *Config) *Importer {
+	if cfg == nil {
+		cfg = &Config{}
+	}
+
 	return &Importer{
 		Imports: make(map[string]*types.Package),
+		Config:  cfg,
 	}
 }
 
@@ -126,7 +135,7 @@ func (imp *Importer) Import(imports map[string]*types.Package, path string) (pkg
 		// again by using GcImport. That way we can extract all
 		// required type information, but we risk importing an
 		// outdated version.
-		if imp.UseGcFallback && strings.Contains(err.Error(), `cannot find package "C" in`) {
+		if imp.Config.UseGcFallback && strings.Contains(err.Error(), `cannot find package "C" in`) {
 			gcPkg, gcErr := types.GcImport(imp.Imports, path)
 			if gcErr == nil {
 				imported(gcPkg)
