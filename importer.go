@@ -18,17 +18,12 @@ type Config struct {
 type Importer struct {
 	Imports   map[string]*types.Package // All packages imported by Importer
 	Fallbacks []string                  // List of imports that we had to fall back to GcImport for
-	Config    *Config
+	Config    Config                    // Configuration for the importer
 }
 
-func NewImporter(cfg *Config) *Importer {
-	if cfg == nil {
-		cfg = &Config{}
-	}
-
+func NewImporter() *Importer {
 	return &Importer{
 		Imports: make(map[string]*types.Package),
-		Config:  cfg,
 	}
 }
 
