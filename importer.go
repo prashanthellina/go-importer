@@ -21,7 +21,7 @@ type Importer struct {
 	Config    Config                    // Configuration for the importer
 }
 
-func NewImporter() *Importer {
+func New() *Importer {
 	return &Importer{
 		Imports: make(map[string]*types.Package),
 	}
