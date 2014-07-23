@@ -1,8 +1,6 @@
 package importer
 
 import (
-	"code.google.com/p/go.tools/go/gcimporter"
-	"code.google.com/p/go.tools/go/types"
 	"fmt"
 	"go/ast"
 	"go/build"
@@ -10,6 +8,9 @@ import (
 	"go/token"
 	"os"
 	"strings"
+
+	"code.google.com/p/go.tools/go/gcimporter"
+	"code.google.com/p/go.tools/go/types"
 )
 
 type Config struct {
@@ -17,9 +18,11 @@ type Config struct {
 }
 
 type Importer struct {
-	Imports   map[string]*types.Package // All packages imported by Importer
-	Fallbacks []string                  // List of imports that we had to fall back to GcImport for
-	Config    Config                    // Configuration for the importer
+	cycleSeen   map[string]bool
+	cyclesStack []string
+	Imports     map[string]*types.Package // All packages imported by Importer
+	Fallbacks   []string                  // List of imports that we had to fall back to GcImport for
+	Config      Config                    // Configuration for the importer
 }
 
 func New() *Importer {
@@ -30,6 +33,12 @@ func New() *Importer {
 
 // Import implements the Importer type from go/types.
 func (imp *Importer) Import(imports map[string]*types.Package, path string) (pkg *types.Package, err error) {
+	imp.cycleSeen = make(map[string]bool)
+	imp.cyclesStack = nil
+	return imp.realImport(imports, path)
+}
+
+func (imp *Importer) realImport(imports map[string]*types.Package, path string) (pkg *types.Package, err error) {
 	// types.Importer does not seem to be designed for recursive
 	// parsing like we're doing here. Specifically, each nested import
 	// will maintain its own imports map. This will lead to duplicate
@@ -121,8 +130,14 @@ func (imp *Importer) Import(imports map[string]*types.Package, path string) (pkg
 		ff = append(ff, f)
 	}
 
+	if imp.cycleSeen[path] {
+		return nil, fmt.Errorf("import cycle %s -> %s", strings.Join(imp.cyclesStack, " -> "), path)
+	}
+	imp.cycleSeen[path] = true
+	imp.cyclesStack = append(imp.cyclesStack, path)
+
 	context := types.Config{
-		Import: imp.Import,
+		Import: imp.realImport,
 	}
 
 	pkg, err = context.Check(name, fileSet, ff, nil)
