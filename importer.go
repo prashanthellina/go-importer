@@ -1,4 +1,4 @@
-package importer
+package importer // import "honnef.co/go/importer"
 
 import (
 	"fmt"
