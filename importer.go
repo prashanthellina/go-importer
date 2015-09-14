@@ -1,16 +1,15 @@
-package importer // import "honnef.co/go/importer"
+package importer
 
 import (
 	"fmt"
 	"go/ast"
 	"go/build"
+	"go/importer"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"strings"
-
-	"golang.org/x/tools/go/gcimporter"
-	"golang.org/x/tools/go/types"
 )
 
 type Config struct {
@@ -23,22 +22,25 @@ type Importer struct {
 	Imports     map[string]*types.Package // All packages imported by Importer
 	Fallbacks   []string                  // List of imports that we had to fall back to GcImport for
 	Config      Config                    // Configuration for the importer
+
+	gcImporter types.Importer
 }
 
 func New() *Importer {
 	return &Importer{
-		Imports: make(map[string]*types.Package),
+		gcImporter: importer.Default(),
+		Imports:    make(map[string]*types.Package),
 	}
 }
 
 // Import implements the Importer type from go/types.
-func (imp *Importer) Import(imports map[string]*types.Package, path string) (pkg *types.Package, err error) {
+func (imp Importer) Import(path string) (pkg *types.Package, err error) {
 	imp.cycleSeen = make(map[string]bool)
 	imp.cyclesStack = nil
-	return imp.realImport(imports, path)
+	return imp.realImport(path)
 }
 
-func (imp *Importer) realImport(imports map[string]*types.Package, path string) (pkg *types.Package, err error) {
+func (imp *Importer) realImport(path string) (pkg *types.Package, err error) {
 	// types.Importer does not seem to be designed for recursive
 	// parsing like we're doing here. Specifically, each nested import
 	// will maintain its own imports map. This will lead to duplicate
@@ -58,8 +60,6 @@ func (imp *Importer) realImport(imports map[string]*types.Package, path string) 
 	// not having to parse most of the Go standard library.
 
 	imported := func(pkg *types.Package) {
-		// We don't use imports, but per API we have to add the package.
-		imports[pkg.Path()] = pkg
 		imp.Imports[pkg.Path()] = pkg
 	}
 
@@ -69,7 +69,7 @@ func (imp *Importer) realImport(imports map[string]*types.Package, path string) 
 	// it's in GOROOT. This way we always use up-to-date code for
 	// normal packages but avoid parsing the standard library.
 	if (buildErr == nil && buildPkg.Goroot) || buildErr != nil {
-		pkg, err = gcimporter.Import(imp.Imports, path)
+		pkg, err = imp.gcImporter.Import(path)
 		if err == nil {
 			imported(pkg)
 			return pkg, nil
@@ -137,7 +137,7 @@ func (imp *Importer) realImport(imports map[string]*types.Package, path string) 
 	imp.cyclesStack = append(imp.cyclesStack, path)
 
 	context := types.Config{
-		Import: imp.realImport,
+		Importer: imp,
 	}
 
 	pkg, err = context.Check(name, fileSet, ff, nil)
@@ -147,7 +147,7 @@ func (imp *Importer) realImport(imports map[string]*types.Package, path string) 
 		// required type information, but we risk importing an
 		// outdated version.
 		if imp.Config.UseGcFallback && strings.Contains(err.Error(), `cannot find package "C" in`) {
-			gcPkg, gcErr := gcimporter.Import(imp.Imports, path)
+			gcPkg, gcErr := imp.gcImporter.Import(path)
 			if gcErr == nil {
 				imported(gcPkg)
 				imp.Fallbacks = append(imp.Fallbacks, path)
@@ -157,7 +157,6 @@ func (imp *Importer) realImport(imports map[string]*types.Package, path string) 
 		return pkg, err
 	}
 
-	imports[path] = pkg
 	imp.Imports[path] = pkg
 	return pkg, nil
 }
